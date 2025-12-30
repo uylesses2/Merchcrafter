@@ -49,3 +49,4 @@ A full-stack web application for creating merch from books.
 ## Development
 - `npm run dev:backend` - Run only backend
 - `npm run dev:frontend` - Run only frontend
+"# Merchcrafter" 
