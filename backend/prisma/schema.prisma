@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  role      String   @default("USER") // "USER" | "ADMIN"
+  credits   Int      @default(0)
+  createdAt DateTime @default(now())
+  lastLoginAt DateTime?
+
+  projects      Project[]
+  transactions  CreditTransaction[]
+}
+
+model Project {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  
+  // sourceType String  // Removed
+  originalFilename String // Treating as "Project Name"
+  description String?
+  status    String   // "CREATED", "GENERATING"
+  createdAt DateTime @default(now())
+
+  generations Generation[]
+}
+
+model Generation {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  project   Project  @relation(fields: [projectId], references: [id])
+  
+  type      String   // "PREVIEW", "FINAL"
+  stylePreset String? // For analytics
+  imageUrl  String?
+  status    String   // "PENDING", "COMPLETED"
+  createdAt DateTime @default(now())
+}
+
+model CreditTransaction {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  
+  amount    Int // Positive for grant/purchase, negative for usage
+  type      String // "GRANT", "PURCHASE", "PREVIEW", "FINAL"
+  createdAt DateTime @default(now())
+}
