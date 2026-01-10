@@ -12,6 +12,7 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+console.log("AuthContext file loaded");
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log("AuthProvider initializing");

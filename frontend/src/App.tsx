@@ -1,70 +1,49 @@
-import { BrowserRouter, Routes, Route, Navigate, Outlet, Link } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import Layout from './components/Layout';
+import LandingPage from './pages/LandingPage';
 
-import Home from './pages/Home';
+// Pages
+import Projects from './pages/Home'; // Projects List (aliased from Home)
 import Upload from './pages/Upload';
 import ProjectDetails from './pages/ProjectDetails';
+import Books from './pages/Books';
+import BookAnalyzer from './pages/BookAnalyzer';
+import Settings from './pages/Settings';
 import Billing from './pages/Billing';
 import AdminDashboard from './pages/AdminDashboard';
-import Settings from './pages/Settings';
+import Feedback from './pages/Feedback';
 
-function ProtectedLayout() {
-  const { user, isLoading, logout } = useAuth();
-
-  if (isLoading) return <div>Loading...</div>;
+function RequireAuth({ children }: { children: JSX.Element }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return <div className="flex items-center justify-center h-screen bg-gray-900 text-white">Loading...</div>;
   if (!user) return <Navigate to="/auth/login" />;
-
-  return (
-    <div className="min-h-screen bg-slate-50">
-      <nav className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex">
-              <Link to="/" className="flex-shrink-0 flex items-center font-bold text-xl text-indigo-600">
-                MerchCrafter
-              </Link>
-              <div className="ml-6 flex space-x-8 items-center">
-                <Link to="/" className="text-gray-900 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium">Projects</Link>
-                <Link to="/upload" className="text-gray-900 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium">New Project</Link>
-                <Link to="/billing" className="text-gray-900 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium">Credits</Link>
-                <Link to="/settings" className="text-gray-900 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium">Settings</Link>
-                {user.role === 'ADMIN' && (
-                  <Link to="/admin" className="text-gray-900 hover:text-red-600 px-3 py-2 rounded-md text-sm font-medium">Admin</Link>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center">
-              <span className="mr-4 text-sm text-gray-700">Credits: <span className="font-bold">{user.credits}</span></span>
-              <span className="mr-4 text-sm text-gray-500">{user.email}</span>
-              <button onClick={logout} className="text-sm text-gray-500 hover:text-gray-700">Logout</button>
-            </div>
-          </div>
-        </div>
-      </nav>
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <Outlet />
-      </main>
-    </div>
-  );
+  return children;
 }
 
 function App() {
-  console.log("Rendering App");
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          <Route path="/" element={<Navigate to="/landing" replace />} />
+          <Route path="/landing" element={<LandingPage />} />
           <Route path="/auth/login" element={<Login />} />
           <Route path="/auth/register" element={<Register />} />
-          <Route element={<ProtectedLayout />}>
-            <Route path="/" element={<Home />} />
-            <Route path="/upload" element={<Upload />} />
+
+          <Route element={<RequireAuth><Layout /></RequireAuth>}>
+            <Route path="/projects" element={<Projects />} />
             <Route path="/project/:id" element={<ProjectDetails />} />
-            <Route path="/billing" element={<Billing />} />
-            <Route path="/admin" element={<AdminDashboard />} />
+            {/* ... rest of protected routes */}
+            <Route path="/upload" element={<Upload />} />
+            <Route path="/books" element={<Books />} />
+            <Route path="/analyzer" element={<BookAnalyzer />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/billing" element={<Billing />} />
+            <Route path="/feedback" element={<Feedback />} />
+            <Route path="/admin" element={<AdminDashboard />} />
           </Route>
         </Routes>
       </BrowserRouter>

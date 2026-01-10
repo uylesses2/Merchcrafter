@@ -1,182 +1,341 @@
-import { useEffect, useState } from 'react';
-import { apiFetch } from '../lib/api';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { Users, Activity, DollarSign, CreditCard, Layout } from 'lucide-react';
 
-interface AdminStats {
-    kpi: {
-        totalUsers: number;
-        activeUsers24h: number;
-        totalProjects: number;
-        totalRevenue: number;
-        totalCreditsConsumed: number;
-    };
-    breakdown: {
-        previewCount: number;
-        finalCount: number;
-        uploadTypes: { name: string; value: number }[];
-        stylePopularity: { name: string; value: number }[];
-    };
-    charts: {
-        dailyNewUsers: { date: string; count: number }[];
-    };
-    recentUsers: any[];
-}
+import React, { useEffect, useState } from 'react';
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
+import { adminApi } from '../api/admin';
+import type { LLMProvider, ModelInfo, TaskConfig } from '../api/admin';
+
 
 export default function AdminDashboard() {
-    const [stats, setStats] = useState<AdminStats | null>(null);
+    const [providers, setProviders] = useState<LLMProvider[]>([]);
+    const [tasks, setTasks] = useState<TaskConfig[]>([]);
+    const [modelsMap, setModelsMap] = useState<Record<string, ModelInfo[]>>({});
+    const [usage, setUsage] = useState<any[]>([]);
+    const [taskUsage, setTaskUsage] = useState<any[]>([]);
+    const [queueStats, setQueueStats] = useState<{ queued: number, processing: number } | null>(null);
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
     useEffect(() => {
-        apiFetch('/admin/stats')
-            .then(async res => {
-                if (res.ok) return res.json();
-                const err = await res.json();
-                throw new Error(err.message || 'Failed load stats');
-            })
-            .then(data => setStats(data))
-            .catch(e => setError(e.message));
+        loadInitialData();
     }, []);
 
-    if (error) return <div className="text-red-500 p-6">Error: {error}</div>;
-    if (!stats) return <div className="p-6">Loading analytics...</div>;
+    const loadInitialData = async () => {
+        setLoading(true);
+        try {
+            const [p, t, u, q, tu] = await Promise.all([
+                adminApi.getProviders(),
+                adminApi.getTasks(),
+                adminApi.getUsage(),
+                adminApi.getQueueStats(),
+                adminApi.getTaskUsage()
+            ]);
+            setProviders(p);
+            setTasks(t);
+            setUsage(u);
+            setQueueStats(q);
+            setTaskUsage(tu);
+        } catch (err: any) {
+            setError(err.message || 'Failed to load data');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSaveKey = async (name: string, key: string) => {
+        try {
+            await adminApi.updateProvider(name, key);
+            alert('Key saved and verified!');
+            loadInitialData(); // Refresh status
+        } catch (err: any) {
+            alert('Failed to save key: ' + err.message);
+        }
+    };
+
+    const handleFetchModels = async (providerName: string) => {
+        try {
+            const models = await adminApi.fetchModels(providerName);
+            setModelsMap(prev => ({ ...prev, [providerName]: models }));
+        } catch (err: any) {
+            alert('Failed to fetch models: ' + err.message);
+        }
+    };
+
+    const handleSaveTask = async (task: string, provider: string, model: string, budget?: number) => {
+        try {
+            await adminApi.updateTask(task, provider, model, budget);
+            alert('Task updated!');
+            loadInitialData();
+        } catch (err: any) {
+            alert('Failed to update task: ' + err.message);
+        }
+    };
+
+    const handleQueueAction = async (action: 'restart') => {
+        await adminApi.controlQueue(action);
+        alert('Action triggered');
+    };
+
 
     return (
-        <div className="space-y-8 pb-10">
-            <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold text-gray-900">Admin Analytics</h1>
-                <span className="text-sm text-gray-500">Live Data</span>
-            </div>
+        <div className="p-8 max-w-6xl mx-auto space-y-12">
+            <h1 className="text-3xl font-extrabold mb-8 text-primary">Admin Control Panel</h1>
 
-            {/* KPI Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <KpiCard icon={<Users className="w-6 h-6 text-indigo-600" />} title="Total Users" value={stats.kpi.totalUsers} sub={`Active 24h: ${stats.kpi.activeUsers24h}`} />
-                <KpiCard icon={<Layout className="w-6 h-6 text-blue-600" />} title="Projects Created" value={stats.kpi.totalProjects} />
-                <KpiCard icon={<CreditCard className="w-6 h-6 text-green-600" />} title="Credits Consumed" value={stats.kpi.totalCreditsConsumed} />
-                <KpiCard icon={<DollarSign className="w-6 h-6 text-yellow-600" />} title="Est. Revenue" value={`$${stats.kpi.totalRevenue.toFixed(2)}`} />
-            </div>
+            {error && <div className="bg-red-50 p-4 text-red-900 border border-red-200 font-bold rounded">{error}</div>}
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* PROVIDERS */}
+            <section className="bg-white p-6 rounded shadow border border-slate-200">
+                <h2 className="text-xl font-bold mb-4 text-primary">LLM Providers</h2>
+                <div className="grid gap-6">
+                    {['gemini', 'openai'].map(name => {
+                        const provider = providers.find(p => p.name === name);
+                        return (
+                            <div key={name} className="border-2 border-slate-200 p-4 rounded bg-slate-50">
+                                <h3 className="font-bold capitalize mb-2 text-primary text-lg">{name}</h3>
+                                <div className="flex items-center gap-4 mb-4">
+                                    <div className={`px-2 py-1 text-sm font-bold rounded border ${provider?.lastKeyTestStatus === 'valid' ? 'bg-green-100 text-green-900 border-green-300' : 'bg-yellow-100 text-yellow-900 border-yellow-300'}`}>
+                                        Status: {provider?.lastKeyTestStatus || 'Unknown'}
+                                    </div>
+                                    <div className="text-sm text-secondary font-bold">
+                                        Key: {provider?.encryptedKey ? '********' : 'Not Set'}
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="password"
+                                        placeholder="New API Key"
+                                        className="border-2 border-slate-300 p-2 rounded flex-1 text-primary placeholder-secondary font-medium focus:border-blue-600 focus:ring-blue-600 focus:outline-none bg-white"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') handleSaveKey(name, (e.target as HTMLInputElement).value);
+                                        }}
+                                    />
+                                    <button
+                                        onClick={(e) => {
+                                            const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
+                                            handleSaveKey(name, input.value);
+                                        }}
+                                        className="bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-800 font-bold border border-blue-900 shadow-sm"
+                                    >
+                                        Save & Test
+                                    </button>
+                                    <button
+                                        onClick={() => handleFetchModels(name)}
+                                        className="bg-slate-200 text-primary px-4 py-2 rounded hover:bg-slate-300 font-bold border border-slate-400 shadow-sm"
+                                    >
+                                        Fetch Models
+                                    </button>
+                                </div>
 
-                {/* User Growth Chart */}
-                <div className="bg-white p-6 rounded-lg shadow">
-                    <h3 className="text-lg font-semibold mb-4">User Growth (30 Days)</h3>
-                    <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={stats.charts.dailyNewUsers}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                                <YAxis allowDecimals={false} />
-                                <Tooltip />
-                                <Line type="monotone" dataKey="count" stroke="#4f46e5" strokeWidth={2} />
-                            </LineChart>
-                        </ResponsiveContainer>
+                                {/* Models List */}
+                                {modelsMap[name] && (
+                                    <div className="mt-4 max-h-60 overflow-y-auto border-t-2 border-slate-200 pt-2">
+                                        <h4 className="font-bold text-sm mb-2 text-primary">Available Models:</h4>
+                                        <ul className="text-sm space-y-1">
+                                            {modelsMap[name].map(m => (
+                                                <li key={m.name} className="flex justify-between items-center bg-white border border-slate-200 p-2 rounded">
+                                                    <span className="text-primary font-semibold">{m.name}</span>
+                                                    <span className={`text-xs px-2 py-1 rounded font-bold border ${m.hasApiKey ? 'bg-green-100 text-green-900 border-green-300' : 'bg-red-100 text-red-900 border-red-300'}`}>
+                                                        {m.hasApiKey ? 'Key Ready' : 'No Key'}
+                                                    </span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            </section>
+
+            {/* TASKS */}
+            <section className="bg-white p-6 rounded shadow border border-slate-200">
+                <h2 className="text-xl font-bold mb-4 text-primary">Task Configuration</h2>
+                <div className="grid gap-4">
+                    {['embeddings', 'microFragmentLabeling', 'analyzer', 'imageGeneration', 'sceneExtraction', 'timelineResolution', 'visualAnalysis'].map(taskKey => {
+                        const config = tasks.find(t => t.task === taskKey);
+                        const usageInfo = taskUsage.find(u => u.task === taskKey);
+                        return (
+                            <TaskRow
+                                key={taskKey}
+                                task={taskKey}
+                                currentConfig={config}
+                                usageInfo={usageInfo}
+                                providers={providers}
+                                modelsMap={modelsMap}
+                                onSave={handleSaveTask}
+                            />
+                        );
+                    })}
+                </div>
+            </section>
+
+            {/* QUEUE */}
+            <section className="bg-white p-6 rounded shadow border border-slate-200">
+                <h2 className="text-xl font-bold mb-4 text-primary">Ingestion Queue</h2>
+                <div className="flex items-center gap-8">
+                    <div>
+                        <div className="text-3xl font-black text-primary">{queueStats?.queued || 0}</div>
+                        <div className="text-secondary font-bold">Queued</div>
                     </div>
-                </div>
-
-                {/* Style Popularity */}
-                <div className="bg-white p-6 rounded-lg shadow">
-                    <h3 className="text-lg font-semibold mb-4">Top Art Styles</h3>
-                    <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={stats.breakdown.stylePopularity} layout="vertical">
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis type="number" />
-                                <YAxis dataKey="name" type="category" width={100} />
-                                <Tooltip />
-                                <Bar dataKey="value" fill="#8884d8" />
-                            </BarChart>
-                        </ResponsiveContainer>
+                    <div>
+                        <div className="text-3xl font-black text-blue-700">{queueStats?.processing || 0}</div>
+                        <div className="text-secondary font-bold">Processing</div>
                     </div>
+                    <button
+                        onClick={() => handleQueueAction('restart')}
+                        className="ml-auto bg-red-700 text-white px-4 py-2 rounded hover:bg-red-800 font-bold border border-red-900 shadow-sm"
+                    >
+                        Restart Worker
+                    </button>
                 </div>
+            </section>
 
-                {/* Upload Types Pie */}
-                <div className="bg-white p-6 rounded-lg shadow">
-                    <h3 className="text-lg font-semibold mb-4">Content Source Distribution</h3>
-                    <div className="h-64 flex justify-center">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={stats.breakdown.uploadTypes}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={60}
-                                    outerRadius={80}
-                                    fill="#8884d8"
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                >
-                                    {stats.breakdown.uploadTypes.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Pie>
-                                <Tooltip />
-                                <Legend verticalAlign="bottom" height={36} />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-
-                {/* Generation Types */}
-                <div className="bg-white p-6 rounded-lg shadow">
-                    <h3 className="text-lg font-semibold mb-4">Generation Funnel</h3>
-                    <div className="grid grid-cols-2 gap-4 text-center h-full items-center">
-                        <div className="bg-blue-50 p-4 rounded-lg">
-                            <p className="text-gray-500 text-sm">Previews Generated</p>
-                            <p className="text-3xl font-bold text-blue-700">{stats.breakdown.previewCount}</p>
-                        </div>
-                        <div className="bg-purple-50 p-4 rounded-lg">
-                            <p className="text-gray-500 text-sm">Final Upscales</p>
-                            <p className="text-3xl font-bold text-purple-700">{stats.breakdown.finalCount}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Recent Activity Table */}
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-200">
-                    <h3 className="text-lg font-medium text-gray-900">Recent Users</h3>
-                </div>
+            {/* USAGE STATS */}
+            <section className="bg-white p-6 rounded shadow border border-slate-200">
+                <h2 className="text-xl font-bold mb-4 text-primary">Token Usage</h2>
                 <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                    <table className="w-full text-left text-sm border-2 border-slate-200">
+                        <thead className="bg-slate-100 border-b-2 border-slate-200">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Credits</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Joined</th>
+                                <th className="p-3 text-primary font-bold border-r border-slate-200">Date</th>
+                                <th className="p-3 text-primary font-bold border-r border-slate-200">Provider</th>
+                                <th className="p-3 text-primary font-bold border-r border-slate-200">Model</th>
+                                <th className="p-3 text-primary font-bold border-r border-slate-200">Requests</th>
+                                <th className="p-3 text-primary font-bold border-r border-slate-200">Input Tok</th>
+                                <th className="p-3 text-primary font-bold">Output Tok</th>
                             </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {stats.recentUsers.map((user: any) => (
-                                <tr key={user.id}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{user.email}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.role}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.credits}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(user.createdAt).toLocaleDateString()}</td>
+                        <tbody>
+                            {usage.map((row: any) => (
+                                <tr key={row.id} className="border-b border-slate-200 hover:bg-slate-50">
+                                    <td className="p-3 text-primary font-medium border-r border-slate-200">{new Date(row.date).toLocaleDateString()}</td>
+                                    <td className="p-3 capitalize text-primary font-medium border-r border-slate-200">{row.providerName}</td>
+                                    <td className="p-3 text-primary font-medium border-r border-slate-200">{row.modelName}</td>
+                                    <td className="p-3 text-primary font-mono font-bold border-r border-slate-200">{row.requests}</td>
+                                    <td className="p-3 text-primary font-mono font-bold border-r border-slate-200">{row.inputTokens}</td>
+                                    <td className="p-3 text-primary font-mono font-bold">{row.outputTokens}</td>
                                 </tr>
                             ))}
+                            {usage.length === 0 && (
+                                <tr>
+                                    <td colSpan={6} className="p-4 text-center text-secondary font-bold italic">No usage data found.</td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>
-            </div>
+            </section>
         </div>
     );
 }
 
-function KpiCard({ icon, title, value, sub }: { icon: any, title: string, value: string | number, sub?: string }) {
+function TaskRow({ task, currentConfig, usageInfo, providers, modelsMap, onSave }: any) {
+    const [prov, setProv] = useState(currentConfig?.providerName || 'gemini');
+    const [mod, setMod] = useState(currentConfig?.modelName || '');
+    const [budget, setBudget] = useState(currentConfig?.dailyBudget || 200);
+    const [price, setPrice] = useState(currentConfig?.pricePer1kTokens || 0.0);
+
+    // If models not loaded, provide input?
+    const availableModels = modelsMap[prov] || [];
+    const used = usageInfo?.count || 0;
+    const inputTok = usageInfo?.inputTokens || 0;
+    const outputTok = usageInfo?.outputTokens || 0;
+    const estCost = usageInfo?.estimatedCost || 0.0;
+
+    const isBudgetExceeded = used >= budget;
+    const isNearLimit = used >= budget * 0.8;
+
+    useEffect(() => {
+        if (currentConfig) {
+            setProv(currentConfig.providerName);
+            setMod(currentConfig.modelName);
+            setBudget(currentConfig.dailyBudget ?? 200);
+            setPrice(currentConfig.pricePer1kTokens || 0.0);
+        }
+    }, [currentConfig]);
+
     return (
-        <div className="bg-white p-6 rounded-lg shadow flex items-center space-x-4">
-            <div className="bg-gray-100 p-3 rounded-full">
-                {icon}
+        <div className="flex flex-col gap-2 border-b border-slate-200 pb-4 last:border-0 hover:bg-slate-50 p-2 rounded transition-colors bg-white">
+            <div className="flex items-center gap-4">
+                <div className="w-48 font-mono text-sm font-bold text-primary">{task}</div>
+                <select
+                    value={prov}
+                    onChange={e => setProv(e.target.value)}
+                    className="border-2 border-slate-300 p-2 rounded text-primary font-bold focus:border-indigo-600 focus:ring-indigo-600 bg-white"
+                >
+                    <option value="gemini">Gemini</option>
+                    <option value="openai">OpenAI</option>
+                </select>
+
+                {availableModels.length > 0 ? (
+                    <select
+                        value={mod}
+                        onChange={e => setMod(e.target.value)}
+                        className="border-2 border-slate-300 p-2 rounded flex-1 text-primary font-bold focus:border-indigo-600 focus:ring-indigo-600 bg-white"
+                    >
+                        <option value="">Select Model...</option>
+                        {availableModels.map((m: any) => (
+                            <option key={m.name} value={m.name}>{m.name}</option>
+                        ))}
+                    </select>
+                ) : (
+                    <input
+                        type="text"
+                        value={mod}
+                        onChange={e => setMod(e.target.value)}
+                        placeholder="Model Name (e.g. text-embedding-004)"
+                        className="border-2 border-slate-300 p-2 rounded flex-1 text-primary placeholder-secondary font-bold focus:border-indigo-600 focus:ring-indigo-600 bg-white"
+                    />
+                )}
+
+                <div className="flex flex-col items-start">
+                    <label className="text-xs uppercase font-bold text-slate-500">Price/1k</label>
+                    <input
+                        type="number"
+                        step="0.000001"
+                        value={price}
+                        onChange={e => setPrice(parseFloat(e.target.value) || 0)}
+                        className="w-24 p-2 border-2 border-slate-300 rounded font-bold"
+                    />
+                </div>
+
+                <button
+                    onClick={() => onSave(task, prov, mod, budget, price)}
+                    className="bg-indigo-700 text-white px-4 py-2 rounded hover:bg-indigo-800 font-bold border border-indigo-900 shadow-sm h-full self-end"
+                >
+                    Apply
+                </button>
             </div>
-            <div>
-                <p className="text-sm font-medium text-gray-500">{title}</p>
-                <p className="text-2xl font-bold text-gray-900">{value}</p>
-                {sub && <p className="text-xs text-green-600 mt-1">{sub}</p>}
+
+            {/* Usage Stats Row */}
+            <div className="pl-52 flex gap-8 text-xs items-center bg-slate-100 p-2 rounded mt-1">
+                <div className="flex flex-col">
+                    <span className="font-bold text-slate-500">TODAY'S USAGE</span>
+                    <span className="font-mono text-lg">{used} <span className="text-xs text-slate-400">reqs</span></span>
+                </div>
+                <div className="flex flex-col">
+                    <span className="font-bold text-slate-500">TOKENS</span>
+                    <span className="font-mono">In: {inputTok.toLocaleString()} | Out: {outputTok.toLocaleString()}</span>
+                </div>
+                <div className="flex flex-col">
+                    <span className="font-bold text-slate-500">EST. COST</span>
+                    <span className="font-mono text-lg text-green-700">${estCost.toFixed(5)}</span>
+                </div>
+
+                {(task === 'sceneExtraction') && (
+                    <div className="ml-auto flex items-center gap-2">
+                        <span className="font-bold text-slate-600">Budget:</span>
+                        <input
+                            type="number"
+                            value={budget}
+                            onChange={e => setBudget(parseInt(e.target.value) || 0)}
+                            className="w-20 p-1 border border-slate-300 rounded"
+                        />
+                        <div className={`px-2 py-1 rounded border font-bold ${isBudgetExceeded ? 'bg-red-100 text-red-800 border-red-300' : isNearLimit ? 'bg-yellow-100 text-yellow-800 border-yellow-300' : 'bg-green-100 text-green-800 border-green-300'}`}>
+                            {isBudgetExceeded ? 'STOPPED' : 'ACTIVE'}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

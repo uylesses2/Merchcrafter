@@ -24,15 +24,35 @@ export interface ProjectDTO {
     description?: string;
     status: string;
     createdAt: string;
+    books?: any[];
+    generations?: GenerationDTO[];
+    analyses?: AnalysisDTO[];
+}
+
+export interface AnalysisDTO {
+    id: string;
+    projectId: number;
+    bookId?: string;
+    entityName: string;
+    entityType: string;
+    mode: string;
+    summary: string;
+    resultJson: string;
+    createdAt: string;
 }
 
 export interface GenerationDTO {
     id: number;
     projectId: number;
     type: "PREVIEW" | "FINAL";
+    entityId?: string | null;
+    prompt: string;
+    artStyle?: string | null;
+    merchStyle?: string | null;
     imageUrl: string | null;
     status: string;
     createdAt: string;
+    updatedAt: string;
 }
 
 export interface CreateProjectRequest {
@@ -54,3 +74,13 @@ export interface ChangePasswordRequest {
 export interface GenerateFinalRequest {
     previewId: number;
 }
+
+// Visual Analyzer Types removed - exported from analysisTypes
+
+export * from './imageTypes';
+export * from './presets';
+export * from './suggestions';
+export * from './validation';
+export * from './prompting';
+export * from './analysisRegistry';
+export * from './analysisTypes';

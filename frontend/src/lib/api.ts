@@ -14,9 +14,9 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
     });
 
     if (response.status === 401) {
-        // optional: redirect to login or clear token
+        // Token expired or invalid
         localStorage.removeItem('token');
-        window.location.href = '/auth/login';
+        // Let the caller (AuthContext) handle the UI state change
     }
 
     return response;

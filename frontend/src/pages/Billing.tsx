@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../lib/api';
 
@@ -35,7 +35,7 @@ export default function Billing() {
 
             <div className="bg-white p-6 rounded-lg shadow mb-8">
                 <h2 className="text-xl font-semibold mb-2">Current Balance</h2>
-                <div className="text-4xl font-bold text-indigo-600">{user?.credits || 0} <span className="text-lg text-gray-500 font-normal">credits</span></div>
+                <div className="text-4xl font-bold text-indigo-600">{user?.credits || 0} <span className="text-lg text-secondary font-bold">credits</span></div>
             </div>
 
             <h2 className="text-xl font-semibold mb-4">Purchase Credits (Stub)</h2>
@@ -44,7 +44,7 @@ export default function Billing() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
                     <h3 className="text-lg font-bold">Small Bundle</h3>
-                    <p className="text-gray-500 mb-4">20 Credits</p>
+                    <p className="text-secondary font-bold mb-4">20 Credits</p>
                     <div className="text-2xl font-bold mb-6">$5.00</div>
                     <button
                         onClick={() => handlePurchase('small')}
@@ -58,7 +58,7 @@ export default function Billing() {
                 <div className="bg-white p-6 rounded-lg shadow border-2 border-indigo-500 relative">
                     <div className="absolute top-0 right-0 bg-indigo-500 text-white text-xs px-2 py-1 rounded-bl">Popular</div>
                     <h3 className="text-lg font-bold">Medium Bundle</h3>
-                    <p className="text-gray-500 mb-4">50 Credits</p>
+                    <p className="text-secondary font-bold mb-4">50 Credits</p>
                     <div className="text-2xl font-bold mb-6">$10.00</div>
                     <button
                         onClick={() => handlePurchase('medium')}
@@ -71,7 +71,7 @@ export default function Billing() {
 
                 <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
                     <h3 className="text-lg font-bold">Large Bundle</h3>
-                    <p className="text-gray-500 mb-4">100 Credits</p>
+                    <p className="text-secondary font-bold mb-4">100 Credits</p>
                     <div className="text-2xl font-bold mb-6">$18.00</div>
                     <button
                         onClick={() => handlePurchase('large')}
@@ -83,7 +83,7 @@ export default function Billing() {
                 </div>
             </div>
 
-            <div className="mt-8 text-sm text-gray-500 text-center">
+            <div className="mt-8 text-sm text-secondary font-medium text-center">
                 * This is a placeholder billing system. No real charges are made.
             </div>
         </div>
