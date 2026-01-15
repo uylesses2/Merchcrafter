@@ -1,4 +1,3 @@
-
 node_modules
 dist
 build
@@ -44,3 +43,9 @@ lerna-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+ 
+# Prisma dev sqlite files
+backend/prisma/dev.db
+backend/prisma/dev.db-journal
+backend/prisma/*.db
+backend/prisma/*.db-journal
