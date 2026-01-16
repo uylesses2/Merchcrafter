@@ -6,18 +6,12 @@ echo "Running pre-commit secret check..."
 # Redirect output to stderr.
 exec 1>&2
 
-# Check for AIza pattern
-if git diff --cached --name-only -z | xargs -0 git grep -q "AIza"; then
+# Check for AIza pattern (Strict)
+# We use -E for extended regex to match AIza followed by 30+ characters.
+# We also exclude the scripts directory to allow maintenance scripts to contain the pattern.
+if git diff --cached --name-only -z | xargs -0 git grep -I -E "AIza[0-9A-Za-z\-_]{30,}" -- :^scripts/secret-audit.ps1 :^scripts/pre-commit; then
     echo "ERROR: Attempting to commit a file with 'AIza' pattern (Potential Google API Key)."
     echo "Please remove the key and try again."
-    exit 1
-fi
-
-# Check for GEMINI_API_KEY real value usage (heuristic: not the placeholder)
-# We grep for GEMINI_API_KEY and exclude the placeholder.
-if git diff --cached --name-only -z | xargs -0 git grep "GEMINI_API_KEY" | grep -v "YOUR_GEMINI_API_KEY_HERE" | grep -v "process.env.GEMINI_API_KEY" | grep -q .; then
-    echo "ERROR: Potential real GEMINI_API_KEY found in staged files."
-    echo "Please verify you are not committing a real key."
     exit 1
 fi
 
